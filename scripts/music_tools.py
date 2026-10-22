@@ -160,6 +160,36 @@ def decode(path, sr=22050):
     return np.frombuffer(raw, np.float32)
 
 
+def refine_period(onset, ft, period):
+    """박 주기를 곡 전체의 온셋에 맞춰 다듬는다. 근거가 모자라면 입력을 그대로 돌려준다.
+
+    자기상관 피크는 1홉(23ms) 격자 위에 있어 보간해도 주기에 0.1~2ms 오차가 남고, 곡 끝까지 박을 찍으면 그 오차가 쌓인다
+    (60초 125 BPM 곡에서 124.54 BPM 으로 읽어 끝 박이 169ms, 5분 120 BPM 곡에서 양 끝 박이 50~70ms 어긋난 사례).
+    강한 온셋마다 후보 주기 P 에서의 위상 벡터 exp(2πi·t/P)를 더해 크기가 가장 큰 P 를 고른다. 곡 전체를 한꺼번에 보므로
+    처음 추정이 조금 틀려 끝 박이 반 박 가까이 밀려 있어도 맞는 주기를 찾는다.
+    """
+    pk = np.flatnonzero((onset[1:-1] > onset[:-2]) & (onset[1:-1] >= onset[2:])) + 1
+    pk = pk[onset[pk] > np.percentile(onset, 75)]
+    if len(pk) < 16:
+        return period
+    dt = ft[1] - ft[0]
+    y0, y1, y2 = onset[pk - 1], onset[pk], onset[pk + 1]
+    den = np.where(y0 - 2 * y1 + y2 != 0, y0 - 2 * y1 + y2, -1.0)
+    t = ft[pk] + np.clip(0.5 * (y0 - y2) / den, -0.5, 0.5) * dt   # 포물선 보간으로 프레임보다 정밀한 시각
+    w = y1 - np.median(onset)
+
+    def coherence(P):   # 1·2·4배음: 오프비트(반 박)·16분 온셋은 박 주기에서는 서로 상쇄되지만 배음에서는 같은 위상에 모인다
+        return np.stack([np.abs((w[None, :] * np.exp(2j * np.pi * m * t[None, :] / P[:, None])).sum(1)) for m in (1, 2, 4)])
+
+    best = period
+    for span, n in ((0.03, 601), (0.0006, 241)):      # ±3% 를 0.01% 간격으로 훑은 뒤 그 둘레를 더 잘게
+        P = best * np.linspace(1 - span, 1 + span, n)
+        best = float(P[int(np.argmax(coherence(P).sum(0)))])
+    if coherence(np.array([best])).max() < 4 * np.sqrt((w ** 2).sum()):   # 무작위 위상의 기대 크기보다 뚜렷이 크지 않으면 그대로 둔다
+        return period
+    return best
+
+
 def cmd_analyze(a):
     sr = 22050
     x = decode(a.file, sr)
@@ -191,7 +221,8 @@ def cmd_analyze(a):
         bpm *= 2
     while bpm > 165:
         bpm /= 2
-    period = 60 / bpm
+    period = refine_period(2.0 * lflux + flux, ft, 60 / bpm)
+    bpm = 60 / period
     # 위상: 박 격자 위 플럭스 합이 최대인 위상
     best, ph_best = -1, 0
     for ph in np.arange(0, period, 0.005):
@@ -201,13 +232,14 @@ def cmd_analyze(a):
         if sc > best:
             best, ph_best = sc, ph
     beats = np.arange(ph_best, ft[-1], period)
-    # 다운비트: 4박 중 저역 에너지가 가장 큰 위치
+    # 다운비트: 4박 중 저역 에너지가 가장 큰 위치. 박 직후 0.1초의 평균으로 본다
+    # (박 시각은 온셋 감지 특성상 10~25ms 이르게 잡혀, 박 프레임 한 장만 보면 킥·베이스가 오기 전이라 네 무리의 점수가 거의 같아진다)
     low = (S[:, : int(150 / (sr / n))] ** 2).sum(1)
-    sc4 = []
-    for k in range(4):
-        idx = np.round((beats[k::4] * sr - n / 2) / h).astype(int)
-        idx = idx[(idx >= 0) & (idx < len(low))]
-        sc4.append(low[idx].mean() if len(idx) else 0)
+    cl = np.concatenate([[0.0], np.cumsum(low)])
+    i0 = np.searchsorted(ft, beats)
+    i1 = np.maximum(np.searchsorted(ft, beats + 0.1), i0 + 1).clip(max=len(low))
+    lb = (cl[i1] - cl[np.minimum(i0, len(low) - 1)]) / np.maximum(1, i1 - i0)
+    sc4 = [lb[k::4].mean() if len(lb[k::4]) else 0 for k in range(4)]
     downbeats = beats[int(np.argmax(sc4))::4]
     # 강한 히트: 플럭스 피크(상위 3%, 0.25초 간격)
     thr = np.percentile(flux, 97)
