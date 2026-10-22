@@ -78,7 +78,7 @@ codex-image 배치 스크립트는 참조 이미지를 받지 않는다. 반려�
 
 ```bash
 sips -Z 1024 photo.jpg --out <프로젝트>/assets/refs/ref1.jpg      # 참조는 긴 변 1024px 로
-bash ~/.claude/skills/showreel/scripts/codex_ref_image.sh <프로젝트>/assets/gen/g01.png \
+bash $S/codex_ref_image.sh <프로젝트>/assets/gen/g01.png \
   "<신원 특징을 글로 다시 적기> + <장면> + 가로 16:9 구도, 글자·로고 없음" <프로젝트>/assets/refs/ref1.jpg
 ```
 

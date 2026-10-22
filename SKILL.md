@@ -61,7 +61,7 @@ description: 한국어 모션그래픽 영상(이력서용 쇼릴·홍보 영상
 
 오래 걸리는 작업(조사, TTS, 음악 생성, 이미지 생성, 최종 렌더)은 Bash `run_in_background`나 서브에이전트로 돌리고 그동안 다음 단계를 진행한다. `sleep`으로 기다리지 않는다. 구간이 여러 개인 영상은 구간마다 서브에이전트에 나눠 맡겨 동시에 만들 수 있다(`references/engine.md`의 "나눠 만들기").
 
-스크립트 경로는 이 스킬 폴더 기준이다(`~/.claude/skills/showreel/scripts/`). 아래에서 `S=~/.claude/skills/showreel/scripts`로 줄여 쓴다.
+스크립트 경로는 이 스킬 폴더 기준이다. 스킬을 불러올 때 표시되는 "Base directory for this skill"이 스킬 폴더다(프로젝트 스코프로 설치했으면 `<작업 폴더>/.claude/skills/showreel`). 아래에서 `S=<스킬 폴더>/scripts`로 줄여 쓴다.
 
 ## 0. 환경 점검
 

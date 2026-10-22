@@ -35,6 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `SKILL.md` now says scene boundaries also go half a frame before the cue; integer-second boundaries blended neighbouring segments in `--sub 4` renders.
 - `motion_check.py` now runs the same photosensitive flash check as `qa_check.py`, so drafts catch flash failures before the final render (a comparison run found 25 flashes in one segment only at the master QA).
 - `motion_check.py` no longer recommends specific devices (`FX.floor`, Ken Burns, level bars) for frozen stretches.
+- `SKILL.md` and `references/images.md` hard-coded `~/.claude/skills/showreel/scripts`, so a project-scoped install (`git clone … .claude/skills/showreel`, which the README offers) sent Claude to a folder that does not exist. They now use the skill folder Claude Code shows when the skill loads ("Base directory for this skill").
 
 ## [1.0.0] - 2026-10-08
 
