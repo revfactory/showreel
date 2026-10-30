@@ -76,21 +76,26 @@ def main():
     outs = [master]
     if not a.no_web:
         web = od / f"{a.name}_공유용.mp4"
-        cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(master), "-c:v", "libx264", "-preset", "slow", "-crf", "23",
+        cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(master)]
+        if a.audio:   # 마스터의 AAC 를 다시 인코딩하면 피크가 올라 보정이 과하게 걸린다(-14 → -17.5 LUFS 사례) → 원본 믹스에서 한 번만 인코딩
+            cmd += ["-i", a.audio, "-map", "0:v:0", "-map", "1:a:0"]
+        cmd += ["-c:v", "libx264", "-preset", "slow", "-crf", "23",
                "-maxrate", "8M", "-bufsize", "16M", "-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709",
                "-color_trc", "bt709", "-color_range", "tv"]
         if a.audio:
             cmd += ["-c:a", "aac", "-b:a", "192k"]
         cmd += ["-t", f"{vdur:.3f}", "-movflags", "+faststart", str(web)]
         run(cmd)
-        if a.audio:   # AAC 를 한 번 더 인코딩하면 피크가 오른다 → 넘으면 오디오만 낮춰 다시(영상은 복사). 다시 재서 통과할 때까지 최대 3번
+        if a.audio:   # AAC 인코딩이 트루 피크를 올릴 수 있다 → 넘으면 원본 믹스에서 음량만 낮춰 다시(영상은 복사). 다시 재서 통과할 때까지 최대 3번
+            gain = 0.0    # 이미 AAC 로 만든 공유용을 다시 AAC 로 인코딩하면 피크가 또 올라 보정이 겹쳐 쌓인다(-14 → -17.5 LUFS) → 늘 원본에서, 이득만 누적
             for _ in range(3):
                 _, _, tp = loud(web)
                 if tp is None or tp <= -1.0:
                     break
+                gain += -1.6 - tp
                 tmp = web.with_name(web.stem + ".tmp.mp4")
-                run(["ffmpeg", "-v", "error", "-y", "-i", str(web), "-c:v", "copy", "-af", f"volume={-1.6 - tp:.2f}dB",
-                     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(tmp)])
+                run(["ffmpeg", "-v", "error", "-y", "-i", str(web), "-i", a.audio, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+                     "-af", f"volume={gain:.2f}dB", "-c:a", "aac", "-b:a", "192k", "-t", f"{vdur:.3f}", "-movflags", "+faststart", str(tmp)])
                 tmp.replace(web)
         outs.append(web)
     pt = a.poster if a.poster is not None else max(0, vdur - 1.5)
