@@ -26,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `music_tools.py analyze` took the tempo from one autocorrelation peak on the 23 ms hop grid and carried that period to the end of the track, so beats drifted: a 60 s 150 BPM click track read as 150.60 BPM with its last beats 0.2 s off, and a 180 s 90 BPM track drifted 0.33 s. The period is now refined against the phase of every strong onset across the whole track (1st, 2nd and 4th harmonics, so off-beat hi-hats do not cancel the kicks), and downbeats compare the low-band energy in the 0.1 s after each beat instead of one frame. On synthetic tracks from 90 to 150 BPM (60 s and 180 s, with and without off-beat hats) the largest beat error fell from 33–334 ms to 25–27 ms; the remaining constant offset comes from the unchanged phase search.
 - `timeline.py` resolved scene, narration and SFX times before reading the music analysis, so `scenes` could not use the `bar9` / `music.hit2` cues its own header documents. The music analysis is now read first; output for inputs that did not use those cues is unchanged.
 - `timeline.py` now writes a `scene.<id>.end` cue for scenes without an explicit `end` (next scene's start, or the video end). Before, `cue('scene.<id>.end')` returned 0 and the scene never showed.
 - `qa_check.py` counted every frame brighter than 225 as a blown-out white frame, so designed light backgrounds failed QA. It now counts only short bright spikes (< 0.3 s) between darker frames and lists longer light runs as information.
